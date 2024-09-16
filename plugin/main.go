@@ -3,6 +3,15 @@ package main
 import (
 	"context"
 	"flag"
+	"log"
+	"net"
+	"net/http"
+	"net/url"
+	"runtime"
+	"strings"
+	"sync"
+	"syscall"
+
 	"github.com/DnsUnlock/UnlockTest/lib/client"
 	"github.com/DnsUnlock/UnlockTest/lib/dialer"
 	"github.com/DnsUnlock/UnlockTest/lib/proxy"
@@ -10,13 +19,6 @@ import (
 	"github.com/DnsUnlock/UnlockTest/lib/transport"
 	"github.com/DnsUnlock/UnlockTest/testUnlock"
 	"golang.org/x/sys/unix"
-	"log"
-	"net"
-	"net/http"
-	"net/url"
-	"runtime"
-	"sync"
-	"syscall"
 )
 
 type PluginInterface interface {
@@ -500,6 +502,7 @@ type Options struct {
 	Interface  string
 	DnsServers string
 	HttpProxy  string
+	ClientIP   string
 }
 
 func (o *Options) Client() http.Client {
@@ -510,6 +513,12 @@ func (o *Options) Client() http.Client {
 			dialer.Dialer.Control = func(network, address string, c syscall.RawConn) error {
 				return SetSocketOptions(network, address, c, o.Interface)
 			}
+		}
+	}
+	if o.ClientIP != "" {
+		//判断使用是否有端口
+		if strings.Index(o.ClientIP, ":") == -1 {
+			o.ClientIP = o.ClientIP + ":443"
 		}
 	}
 	if o.DnsServers != "" {
@@ -546,13 +555,14 @@ func Flag(args []interface{}) Options {
 	Iface := ""
 	DnsServers := ""
 	httpProxy := ""
+	clienip := ""
 	// Initialize the flags with default values
 	flagSet := flag.NewFlagSet("test", flag.ContinueOnError)
 	flagSet.IntVar(&mode, "m", 0, "mode 0(default)/4/6")
 	flagSet.StringVar(&Iface, "I", "", "source ip / interface")
 	flagSet.StringVar(&DnsServers, "dns-servers", "", "specify dns servers")
 	flagSet.StringVar(&httpProxy, "http-proxy", "", "http proxy")
-
+	flagSet.StringVar(&clienip, "client-ip", "", "Client IP")
 	// Parse the provided arguments
 	var newArgs []string
 	for _, arg := range args {
